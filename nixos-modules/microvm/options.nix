@@ -1,10 +1,11 @@
 { config, options, lib, pkgs, ... }:
 let
   self-lib = import ../../lib {
-    nixpkgs-lib = lib;
+    inherit lib;
   };
 
   hostName = config.networking.hostName or "$HOSTNAME";
+  kernelAtLeast = lib.versionAtLeast config.boot.kernelPackages.kernel.version;
 in
 {
   options.microvm = with lib; {
@@ -16,6 +17,23 @@ in
       '';
     };
 
+    optimize.enable = lib.mkOption {
+      description = ''
+        Enables some optimizations by default to closure size and startup time:
+          - defaults documentation to off
+          - defaults to using systemd in initrd
+          - use systemd-networkd
+          - disables systemd-network-wait-online
+          - disables NixOS system switching if the host store is not mounted
+
+        This takes a few hundred MB off the closure size, including qemu,
+        allowing for putting MicroVMs inside Docker containers.
+      '';
+
+      type = lib.types.bool;
+      default = true;
+    };
+
     cpu = mkOption {
       type = with types; nullOr str;
       default = null;
@@ -23,7 +41,9 @@ in
         What CPU to emulate, if any. If different from the host
         architecture, it will have a serious performance hit.
 
+        ::: {.note}
         Only supported with qemu.
+        :::
       '';
     };
 
@@ -57,7 +77,7 @@ in
     };
 
     kernel = mkOption {
-      description = "Kernel package to use for MicroVM runners";
+      description = "Kernel package to use for MicroVM runners. Better set `boot.kernelPackages` instead.";
       default = config.boot.kernelPackages.kernel;
       defaultText = literalExpression ''"''${config.boot.kernelPackages.kernel}"'';
       type = types.package;
@@ -145,8 +165,7 @@ in
           };
         });
       default = [];
-      example = lib.literalExpression
-        ''
+      example = lib.literalExpression /* nix */ ''
         [ # forward local port 2222 -> 22, to ssh into the VM
           { from = "host"; host.port = 2222; guest.port = 22; }
 
@@ -156,19 +175,21 @@ in
             host.address = "127.0.0.1"; host.port = 80;
           }
         ]
-        '';
+      '';
       description =
         ''
           When using the SLiRP user networking (default), this option allows to
           forward ports to/from the host/guest.
 
-          <warning><para>
-            If the NixOS firewall on the virtual machine is enabled, you also
-            have to open the guest ports to enable the traffic between host and
-            guest.
-          </para></warning>
+          ::: {.warning}
+          If the NixOS firewall on the virtual machine is enabled, you
+          also have to open the guest ports to enable the traffic
+          between host and guest.
+          :::
 
-          <note><para>Currently QEMU supports only IPv4 forwarding.</para></note>
+          ::: {.note}
+          Currently QEMU supports only IPv4 forwarding.
+          :::
         '';
     };
     volumes = mkOption {
@@ -180,10 +201,25 @@ in
             type = str;
             description = "Path to disk image on the host";
           };
+          serial = mkOption {
+            type = nullOr str;
+            default = null;
+            description = "User-configured serial number for the disk";
+          };
+          direct = mkOption {
+            type = bool;
+            default = false;
+            description = "Whether to set O_DIRECT on the disk.";
+          };
+          readOnly = mkOption {
+            type = bool;
+            default = false;
+            description = "Turn off write access";
+          };
           label = mkOption {
             type = nullOr str;
             default = null;
-            description = "Label of the volume, if any. Only applicable if autoCreate is true; otherwise labeling of the volume must be done manually";
+            description = "Label of the volume, if any. Only applicable if `autoCreate` is true; otherwise labeling of the volume must be done manually";
           };
           mountPoint = mkOption {
             type = nullOr path;
@@ -230,15 +266,13 @@ in
             '';
           };
           macvtap.link = mkOption {
-            type = nullOr str;
-            default = null;
+            type = str;
             description = ''
               Attach network interface to host interface for type = "macvlan"
             '';
           };
           macvtap.mode = mkOption {
-            type = nullOr (enum ["private" "vepa" "bridge" "passthru" "source"]);
-            default = null;
+            type = enum ["private" "vepa" "bridge" "passthru" "source"];
             description = ''
               The MACVLAN mode to use
             '';
@@ -302,17 +336,19 @@ in
     devices = mkOption {
       description = "PCI/USB devices that are passed from the host to the MicroVM";
       default = [];
-      example = literalExpression ''[ {
-        bus = "pci";
-        path = "0000:01:00.0";
-      } {
-        bus = "pci";
-        path = "0000:01:01.0";
-      } {
-        # QEMU only
-        bus = "usb";
-        path = "vendorid=0xabcd,productid=0x0123";
-      } ]'';
+      example = literalExpression /* nix */ ''
+        [ {
+          bus = "pci";
+          path = "0000:01:00.0";
+        } {
+          bus = "pci";
+          path = "0000:01:01.0";
+        } {
+          # QEMU only
+          bus = "usb";
+          path = "vendorid=0xabcd,productid=0x0123";
+        } ]
+      '';
       type = with types; listOf (submodule {
         options = {
           bus = mkOption {
@@ -400,14 +436,13 @@ in
 
     qemu.machine = mkOption {
       type = types.str;
-      default = {
-        x86_64-linux = "microvm";
-        aarch64-linux = "virt";
-      }.${pkgs.system};
       description = ''
         QEMU machine model, eg. `microvm`, or `q35`
 
         Get a full list with `qemu-system-x86_64 -M help`
+
+        This has a default declared with `lib.mkDefault` because it
+        depends on ''${pkgs.system}.
       '';
     };
 
@@ -457,6 +492,38 @@ in
       '';
     };
 
+    virtiofsd.inodeFileHandles = mkOption {
+      type = with types; nullOr (enum [
+        "never" "prefer" "mandatory"
+      ]);
+      default = null;
+      description = ''
+        When to use file handles to reference inodes instead of O_PATH file descriptors
+        (never, prefer, mandatory)
+
+        Allows you to overwrite default behavior in case you hit "too
+        many open files" on eg. ZFS.
+        <https://gitlab.com/virtio-fs/virtiofsd/-/issues/121>
+      '';
+    };
+
+    virtiofsd.threadPoolSize = mkOption {
+      type = with types; oneOf [ str ints.unsigned ];
+      default = "`nproc`";
+      description = ''
+        The amounts of threads virtiofsd should spawn. This option also takes the special
+        string `\`nproc\`` which spawns as many threads as the host has cores.
+      '';
+    };
+
+    virtiofsd.extraArgs = mkOption {
+      type = with types; listOf str;
+      default = [];
+      description = ''
+        Extra command-line switch to pass to virtiofsd.
+      '';
+    };
+
     runner = mkOption {
       description = "Generated Hypervisor runner for this NixOS";
       type = with types; attrsOf package;
@@ -468,5 +535,67 @@ in
       default = config.microvm.runner.${config.microvm.hypervisor};
       defaultText = literalExpression ''"config.microvm.runner.''${config.microvm.hypervisor}"'';
     };
+
+    binScripts = mkOption {
+      description = ''
+        Script snippets that end up in the runner package's bin/ directory
+      '';
+      default = {};
+      type = with types; attrsOf lines;
+    };
+
+    storeDiskType = mkOption {
+      type = types.enum [ "squashfs" "erofs" ];
+      description = ''
+        Boot disk file system type: squashfs is smaller, erofs is supposed to be faster.
+
+        Defaults to erofs, unless the NixOS hardened profile is detected.
+      '';
+    };
+
+    storeDiskErofsFlags = mkOption {
+      type = with types; listOf str;
+      description = ''
+        Flags to pass to mkfs.erofs
+
+        Omit `"-Efragments"` and `"-Ededupe"` to enable multi-threading.
+      '';
+      default =
+        [ "-zlz4hc" ]
+        ++
+        lib.optional (kernelAtLeast "5.16") "-Eztailpacking"
+        ++
+        lib.optionals (kernelAtLeast "6.1") [
+          # not implemented with multi-threading
+          "-Efragments"
+          "-Ededupe"
+        ];
+      defaultText = lib.literalExpression ''
+        [ "-zlz4hc" ]
+          ++ lib.optional (kernelAtLeast "5.16") "-Eztailpacking"
+          ++ lib.optionals (kernelAtLeast "6.1") [
+          "-Efragments"
+          "-Ededupe"
+        ]
+        '';
+    };
+
+    storeDiskSquashfsFlags = mkOption {
+      type = with types; listOf str;
+      description = "Flags to pass to gensquashfs";
+      default = [ "-c" "zstd" "-j" "$NIX_BUILD_CORES" ];
+    };
   };
+
+  config = lib.mkMerge [ {
+    microvm.qemu.machine =
+      lib.mkIf (pkgs.stdenv.system == "x86_64-linux") (
+        lib.mkDefault "microvm"
+      );
+  } {
+    microvm.qemu.machine =
+      lib.mkIf (pkgs.stdenv.system == "aarch64-linux") (
+        lib.mkDefault "virt"
+      );
+  } ];
 }

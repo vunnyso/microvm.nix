@@ -91,12 +91,15 @@
 
         packages =
           let
-            pkgs = nixpkgs.legacyPackages.${system};
+            pkgs = import nixpkgs {
+              inherit system;
+              overlays = [ self.overlay ];
+            };
           in {
             build-microvm = pkgs.callPackage ./pkgs/build-microvm.nix { inherit self; };
             doc = pkgs.callPackage ./pkgs/doc.nix { inherit nixpkgs; };
             microvm = import ./pkgs/microvm-command.nix {
-              inherit pkgs;
+              pkgs = import nixpkgs { inherit system; };
             };
             # all compilation-heavy packages that shall be prebuilt for a binary cache
             prebuilt = pkgs.buildEnv {
@@ -108,6 +111,7 @@
                 crosvm-example
                 kvmtool-example
                 stratovirt-example
+                # alioth-example
                 virtiofsd
               ];
               pathsToLink = [ "/" ];
@@ -115,6 +119,7 @@
               ignoreCollisions = true;
             };
             waypipe = overrideWaypipe pkgs;
+            alioth = pkgs.callPackage ./pkgs/alioth.nix {};
           } //
           # wrap self.nixosConfigurations in executable packages
           builtins.foldl' (result: systemName:
@@ -140,12 +145,14 @@
           })
         ) (import ./checks { inherit self nixpkgs system; });
       }) // {
-        lib = import ./lib { nixpkgs-lib = nixpkgs.lib; };
+        lib = import ./lib { inherit (nixpkgs) lib; };
 
         overlay = final: prev: {
           cloud-hypervisor-graphics = prev.callPackage (spectrum + "/pkgs/cloud-hypervisor") {};
           waypipe = overrideWaypipe prev;
+          alioth = prev.callPackage ./pkgs/alioth.nix {};
         };
+        overlays.default = self.overlay;
 
         nixosModules = {
           microvm = import ./nixos-modules/microvm;
@@ -179,6 +186,7 @@
                     networking.hostName = "${hypervisor}-microvm";
                     services.getty.autologinUser = "root";
 
+                    nixpkgs.overlays = [ self.overlay ];
                     microvm.hypervisor = hypervisor;
                     # share the host's /nix/store if the hypervisor can do 9p
                     microvm.shares = lib.optional (builtins.elem hypervisor hypervisorsWith9p) {

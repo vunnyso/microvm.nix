@@ -4,19 +4,19 @@
 }:
 
 let
-  inherit (pkgs) lib system;
+  inherit (pkgs) lib;
   inherit (microvmConfig) vcpu mem balloonMem user interfaces volumes shares socket devices hugepageMem graphics storeDisk storeOnDisk kernel initrdPath;
   inherit (microvmConfig.cloud-hypervisor) extraArgs;
 
   kernelPath = {
     x86_64-linux = "${kernel.dev}/vmlinux";
     aarch64-linux = "${kernel.out}/${pkgs.stdenv.hostPlatform.linux-kernel.target}";
-  }.${pkgs.system};
+  }.${pkgs.stdenv.system};
 
   kernelConsole =
-    if system == "x86_64-linux"
+    if pkgs.stdenv.system == "x86_64-linux"
     then "earlyprintk=ttyS0 console=ttyS0"
-    else if system == "aarch64-linux"
+    else if pkgs.stdenv.system == "aarch64-linux"
     then "console=ttyAMA0"
     else "";
 
@@ -26,7 +26,11 @@ let
   useVirtiofs = builtins.any ({ proto, ... }: proto == "virtiofs") shares;
 
   # Transform attrs to parameters in form of `key1=value1,key2=value2,[...]`
-  opsMapped = ops: lib.concatStringsSep "," (lib.mapAttrsToList (k: v: "${k}=${v}") ops);
+  opsMapped = ops: lib.concatStringsSep "," (
+    lib.mapAttrsToList (k: v:
+      "${k}=${v}"
+    ) ops
+  );
 
   # Attrs representing CHV mem options
   memOps = opsMapped ({
@@ -85,6 +89,8 @@ let
     vulkan = true;
   };
 
+  supportsNotifySocket = true;
+
 in {
   inherit tapMultiQueue;
 
@@ -96,13 +102,15 @@ in {
       rm -f '${socket}'
     ''}
 
-
+  '' + lib.optionalString supportsNotifySocket ''
     # Ensure notify sockets are removed if cloud-hypervisor didn't exit cleanly the last time
     rm -f notify.vsock notify.vsock_8888
 
     # Start socat to forward systemd notify socket over vsock
-    if [ -n "$NOTIFY_SOCKET" ]; then
-      ${pkgs.socat}/bin/socat UNIX-LISTEN:notify.vsock_8888,fork UNIX-SENDTO:$NOTIFY_SOCKET &
+    if [ -n "''${NOTIFY_SOCKET:-}" ]; then
+      # -T2 is required because cloud-hypervisor does not handle partial
+      # shutdown of the stream, like systemd v256+ does.
+      ${pkgs.socat}/bin/socat -T2 UNIX-LISTEN:notify.vsock_8888,fork UNIX-SENDTO:$NOTIFY_SOCKET &
     fi
   '' + lib.optionalString graphics.enable ''
     rm -f ${graphics.socket}
@@ -116,7 +124,7 @@ in {
     done
   '';
 
-  supportsNotifySocket = true;
+  inherit supportsNotifySocket;
 
   command =
     if user != null
@@ -136,6 +144,9 @@ in {
         "--cmdline" "${kernelConsole} reboot=t panic=-1 ${toString microvmConfig.kernelParams}"
         "--seccomp" "true"
         "--memory" memOps
+      ]
+      ++
+      lib.optionals supportsNotifySocket [
         "--platform" "oem_strings=[io.systemd.credential:vmm.notify_socket=vsock-stream:2:8888]"
         "--vsock" "cid=3,socket=notify.vsock"
       ]
@@ -152,9 +163,25 @@ in {
           readonly = "on";
         } // mqOps))
         ++
-        map ({ image, ... }: (opsMapped ({
-          path = toString image;
-        } // mqOps))) volumes
+        map ({ image, serial, direct, readOnly, ... }:
+          opsMapped (
+            {
+              path = toString image;
+              direct =
+                if direct
+                then "on"
+                else "off";
+              readonly =
+                if readOnly
+                then "on"
+                else "off";
+            } //
+            lib.optionalAttrs (serial != null) {
+              inherit serial;
+            } //
+            mqOps
+          )
+        ) volumes
       )
       ++
       arg "--fs" (map ({ proto, socket, tag, ... }:

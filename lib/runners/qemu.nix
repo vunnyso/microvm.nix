@@ -4,14 +4,15 @@
 }:
 
 let
-  inherit (pkgs) lib system;
+  inherit (pkgs) lib;
+  inherit (pkgs.stdenv) system;
 
   enableLibusb = pkg: pkg.overrideAttrs (oa: {
     configureFlags = oa.configureFlags ++ [
       "--enable-libusb"
     ];
     buildInputs = oa.buildInputs ++ (with pkgs; [
-      libusb
+      libusb1
     ]);
   });
 
@@ -41,7 +42,7 @@ let
   inherit (microvmConfig) hostName cpu vcpu mem balloonMem user interfaces shares socket forwardPorts devices vsock graphics storeOnDisk kernel initrdPath storeDisk;
   inherit (microvmConfig.qemu) machine extraArgs serialConsole;
 
-  inherit (import ../. { nixpkgs-lib = pkgs.lib; }) withDriveLetters;
+  inherit (import ../. { inherit (pkgs) lib; }) withDriveLetters;
 
   volumes = withDriveLetters microvmConfig;
 
@@ -146,7 +147,13 @@ let
     else "";
 
 
-in {
+in
+lib.warnIf (mem == 2048) ''
+  QEMU hangs if memory is exactly 2GB
+
+  <https://github.com/astro/microvm.nix/issues/171>
+''
+{
   inherit tapMultiQueue;
 
   command = lib.escapeShellArgs (
@@ -202,8 +209,16 @@ in {
     lib.optionals (user != null) [ "-user" user ] ++
     lib.optionals (socket != null) [ "-qmp" "unix:${socket},server,nowait" ] ++
     lib.optionals (balloonMem > 0) [ "-device" "virtio-balloon" ] ++
-    builtins.concatMap ({ image, letter, ... }:
-      [ "-drive" "id=vd${letter},format=raw,file=${image},if=none,aio=io_uring,discard=unmap" "-device" "virtio-blk-${devType},drive=vd${letter}" ]
+    builtins.concatMap ({ image, letter, serial, direct, readOnly, ... }:
+      [ "-drive"
+        "id=vd${letter},format=raw,file=${image},if=none,aio=io_uring,discard=unmap${
+          lib.optionalString (direct != null) ",cache=none"
+        },read-only=${if readOnly then "on" else "off"}"
+        "-device"
+        "virtio-blk-${devType},drive=vd${letter}${
+          lib.optionalString (serial != null) ",serial=${serial}"
+        }"
+      ]
     ) volumes ++
     lib.optionals (shares != []) (
       [

@@ -14,10 +14,11 @@
       type = types.bool;
       default = false;
       description = ''
-        Enable if all your MicroVMs run with a Hypervisor that sends readiness notification over a VSOCK.
+        Enable if all your MicroVMs run with a Hypervisor that sends
+        readiness notification over a VSOCK.
 
-        If one of your MicroVMs doesn't do this, its systemd service
-        will not start up successfully.
+        **Danger!** If one of your MicroVMs doesn't do this, its
+        systemd service will not start up successfully!
       '';
     };
 
@@ -25,7 +26,7 @@
       type = with types; attrsOf (submodule ({ config, name, ... }: {
         options = {
           config = mkOption {
-            description = lib.mdDoc ''
+            description = ''
               A specification of the desired configuration of this MicroVM,
               as a NixOS module, for building **without** a flake.
             '';
@@ -56,9 +57,12 @@
             type = types.path;
             default = if config.pkgs != null then config.pkgs.path else pkgs.path;
             defaultText = literalExpression "pkgs.path";
-            description = lib.mdDoc ''
-              This option is only respected when `config` is specified.
-              The nixpkgs path to use for the MicroVM. Defaults to the host's nixpkgs.
+            description = ''
+              This option is only respected when `config` is
+              specified.
+
+              The nixpkgs path to use for the MicroVM. Defaults to the
+              host's nixpkgs.
             '';
           };
 
@@ -66,9 +70,13 @@
             type = types.nullOr types.unspecified;
             default = pkgs;
             defaultText = literalExpression "pkgs";
-            description = lib.mdDoc ''
+            description = ''
               This option is only respected when `config` is specified.
-              The package set to use for the MicroVM. Must be a nixpkgs package set with the microvm overlay. Determines the system of the MicroVM.
+
+              The package set to use for the MicroVM. Must be a
+              nixpkgs package set with the microvm overlay. Determines
+              the system of the MicroVM.
+
               If set to null, a new package set will be instantiated.
             '';
           };
@@ -76,8 +84,9 @@
           specialArgs = mkOption {
             type = types.attrsOf types.unspecified;
             default = {};
-            description = lib.mdDoc ''
+            description = ''
               This option is only respected when `config` is specified.
+
               A set of special arguments to be passed to NixOS modules.
               This will be merged into the `specialArgs` used to evaluate
               the NixOS configurations.
@@ -88,12 +97,14 @@
             description = "Source flake for declarative build";
             type = nullOr path;
             default = null;
+            defaultText = literalExpression ''flakeInputs.my-infra'';
           };
 
           updateFlake = mkOption {
-            description = "Source flake to store for later imperative update";
+            description = "Source flakeref to store for later imperative update";
             type = nullOr str;
             default = null;
+            defaultText = literalExpression ''"git+file:///home/user/my-infra"'';
           };
 
           autostart = mkOption {
@@ -135,29 +146,6 @@
         MicroVMs to start by default.
 
         This includes declarative `config.microvm.vms` as well as MicroVMs that are managed through the `microvm` command.
-      '';
-    };
-
-    virtiofsd.inodeFileHandles = mkOption {
-      type = with types; nullOr (enum [
-        "never" "prefer" "mandatory"
-      ]);
-      default = null;
-      description = ''
-        When to use file handles to reference inodes instead of O_PATH file descriptors
-        (never, prefer, mandatory)
-
-        Allows you to overwrite default behavior in case you hit "too
-        many open files" on eg. ZFS.
-        <https://gitlab.com/virtio-fs/virtiofsd/-/issues/121>
-      '';
-    };
-
-    virtiofsd.extraArgs = mkOption {
-      type = with types; listOf str;
-      default = [];
-      description = ''
-        Extra command-line switch to pass to virtiofsd.
       '';
     };
   };

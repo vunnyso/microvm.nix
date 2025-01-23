@@ -41,10 +41,13 @@ nixpkgs.lib.nixosSystem {
           Once nested MicroVMs have booted you can look up DHCP leases:
           networkctl status virbr0
 
-          They are configured to allow SSH login with an empty root
-          password.
+          They are configured to allow SSH login with root password:
+          toor
         '';
         services.getty.autologinUser = "root";
+
+        # Make alioth available
+        nixpkgs.overlays = [ self.overlay ];
 
         # MicroVM settings
         microvm = {
@@ -77,7 +80,7 @@ nixpkgs.lib.nixosSystem {
             # Just use 99-ethernet-default-dhcp.network
             systemd.network.enable = true;
 
-            users.users.root.password = "";
+            users.users.root.password = "toor";
             services.openssh = {
               enable = true;
               settings.PermitRootLogin = "yes";

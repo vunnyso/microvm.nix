@@ -4,9 +4,11 @@
 }:
 
 let
-  inherit (pkgs) lib writeScriptBin;
+  inherit (pkgs) lib;
 
-  inherit (import ./. { nixpkgs-lib = lib; }) createVolumesScript makeMacvtap;
+  inherit (microvmConfig) hostName virtiofsdScripts;
+
+  inherit (import ./. { inherit lib; }) createVolumesScript makeMacvtap;
   inherit (makeMacvtap {
     inherit microvmConfig hypervisorConfig;
   }) openMacvtapFds macvtapFds;
@@ -19,57 +21,55 @@ let
   supportsNotifySocket = hypervisorConfig.supportsNotifySocket or false;
   preStart = hypervisorConfig.preStart or microvmConfig.preStart;
   tapMultiQueue = hypervisorConfig.tapMultiQueue or false;
+  setBalloonScript = hypervisorConfig.setBalloonScript or null;
 
   execArg = lib.optionalString microvmConfig.prettyProcnames
-    ''-a "microvm@${microvmConfig.hostName}"'';
+    ''-a "microvm@${hostName}"'';
 
-  runScriptBin = pkgs.buildPackages.writeScriptBin "microvm-run" ''
-    #! ${pkgs.runtimeShell} -e
+  binScripts = microvmConfig.binScripts // {
+    microvm-run = ''
+      set -eou pipefail
+      ${preStart}
+      ${createVolumesScript pkgs.buildPackages microvmConfig.volumes}
+      ${lib.optionalString (hypervisorConfig.requiresMacvtapAsFds or false) openMacvtapFds}
 
-    ${preStart}
-    ${createVolumesScript pkgs.buildPackages microvmConfig.volumes}
-    ${lib.optionalString (hypervisorConfig.requiresMacvtapAsFds or false) openMacvtapFds}
+      exec ${execArg} ${command}
+    '';
+  } // lib.optionalAttrs canShutdown {
+    microvm-shutdown = shutdownCommand;
+  } // lib.optionalAttrs (setBalloonScript != null) {
+    microvm-balloon = ''
+      set -e
 
-    exec ${execArg} ${command}
-  '';
+      if [ -z "$1" ]; then
+        echo "Usage: $0 <balloon-size-mb>"
+        exit 1
+      fi
 
-  shutdownScriptBin = pkgs.buildPackages.writeScriptBin "microvm-shutdown" ''
-    #! ${pkgs.runtimeShell} -e
+      SIZE=$1
+      ${setBalloonScript}
+    '';
+  };
 
-    ${shutdownCommand}
-  '';
-
-  balloonScriptBin = pkgs.buildPackages.writeScriptBin "microvm-balloon" ''
-    #! ${pkgs.runtimeShell} -e
-
-    if [ -z "$1" ]; then
-      echo "Usage: $0 <balloon-size-mb>"
-      exit 1
-    fi
-
-    SIZE=$1
-    ${hypervisorConfig.setBalloonScript}
-  '';
+  binScriptPkgs = lib.mapAttrs (scriptName: lines:
+    pkgs.writeShellScript "microvm-${hostName}-${scriptName}" lines
+  ) binScripts;
 in
 
-pkgs.buildPackages.runCommand "microvm-${microvmConfig.hypervisor}-${microvmConfig.hostName}"
+pkgs.buildPackages.runCommand "microvm-${microvmConfig.hypervisor}-${hostName}"
 {
   # for `nix run`
   meta.mainProgram = "microvm-run";
   passthru = {
-    inherit canShutdown supportsNotifySocket;
+    inherit canShutdown supportsNotifySocket tapMultiQueue;
     inherit (microvmConfig) hypervisor;
   };
 } ''
   mkdir -p $out/bin
 
-  ln -s ${runScriptBin}/bin/microvm-run $out/bin/microvm-run
-  ${if canShutdown
-    then "ln -s ${shutdownScriptBin}/bin/microvm-shutdown $out/bin/microvm-shutdown"
-    else ""}
-  ${lib.optionalString ((hypervisorConfig.setBalloonScript or null) != null) ''
-    ln -s ${balloonScriptBin}/bin/microvm-balloon $out/bin/microvm-balloon
-  ''}
+  ${lib.concatMapStrings (scriptName: ''
+    ln -s ${binScriptPkgs.${scriptName}} $out/bin/${scriptName}
+  '') (builtins.attrNames binScriptPkgs)}
 
   mkdir -p $out/share/microvm
   ln -s ${toplevel} $out/share/microvm/system

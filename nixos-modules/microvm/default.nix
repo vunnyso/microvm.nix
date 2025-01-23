@@ -2,7 +2,7 @@
 
 let
   microvm-lib = import ../../lib {
-    nixpkgs-lib = lib;
+    inherit lib;
   };
 
 in
@@ -15,6 +15,9 @@ in
     ./asserts.nix
     ./system.nix
     ./mounts.nix
+    ./interfaces.nix
+    ./pci-devices.nix
+    ./virtiofsd
     ./graphics.nix
     ./optimization.nix
     ./ssh-deploy.nix

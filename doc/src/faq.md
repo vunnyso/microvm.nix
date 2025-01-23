@@ -1,5 +1,14 @@
 # Frequently Asked Questions
 
+## Are there elaborate example setups?
+
+microvm.nix is used in these open-source infrastructure projects:
+
+- [C3D2 services](https://gitea.c3d2.de/c3d2/nix-config)
+- [DD-IX services](https://github.com/dd-ix/nix-config)
+
+Let us know if you know more!
+
 ## Can I support the development and maintenance of this project?
 
 [❤ Sponsor](https://github.com/sponsors/astro)
@@ -64,9 +73,7 @@ does.
 environment.systemPackages = [ (
   # Provide a manual updating script that fetches the latest
   # updated+built system from Hydra
-  pkgs.writeScriptBin "update-microvm" ''
-    #! ${pkgs.runtimeShell} -e
-
+  pkgs.writeShellScriptBin "update-microvm" ''
     if [ $# -lt 1 ]; then
       NAMES="$(ls -1 /var/lib/microvms)"
     else

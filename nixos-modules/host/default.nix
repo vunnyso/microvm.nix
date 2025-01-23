@@ -130,85 +130,30 @@ in
         description = "Setup MicroVM '%i' TAP interfaces";
         before = [ "microvm@%i.service" ];
         partOf = [ "microvm@%i.service" ];
-        unitConfig.ConditionPathExists = "${stateDir}/%i/current/share/microvm/tap-interfaces";
+        unitConfig.ConditionPathExists = "${stateDir}/%i/current/bin/tap-up";
         restartIfChanged = false;
         serviceConfig = {
           Type = "oneshot";
           RemainAfterExit = true;
-          ExecStop =
-            let
-              stopScript = pkgs.writeScript "stop-microvm-tap-interfaces" ''
-                #! ${pkgs.runtimeShell} -e
-
-                cd ${stateDir}/$1
-                for id in $(cat current/share/microvm/tap-interfaces); do
-                  ${pkgs.iproute2}/bin/ip tuntap del name $id mode tap
-                done
-              '';
-            in "${stopScript} %i";
           SyslogIdentifier = "microvm-tap-interfaces@%i";
+          ExecStart = "${stateDir}/%i/current/bin/tap-up";
+          ExecStop = "${stateDir}/%i/booted/bin/tap-down";
         };
-        # `ExecStart`
-        scriptArgs = "%i";
-        script = ''
-          cd ${stateDir}/$1
-          TAP_FLAGS="$(cat current/share/microvm/tap-flags)"
-
-          for id in $(cat current/share/microvm/tap-interfaces); do
-            if [ -e /sys/class/net/$id ]; then
-              ${pkgs.iproute2}/bin/ip tuntap del name $id mode tap $TAP_FLAGS
-            fi
-
-            ${pkgs.iproute2}/bin/ip tuntap add name $id mode tap user ${user} $TAP_FLAGS
-            ${pkgs.iproute2}/bin/ip link set $id up
-          done
-        '';
       };
 
       "microvm-macvtap-interfaces@" = {
         description = "Setup MicroVM '%i' MACVTAP interfaces";
         before = [ "microvm@%i.service" ];
         partOf = [ "microvm@%i.service" ];
-        unitConfig.ConditionPathExists = "${stateDir}/%i/current/share/microvm/macvtap-interfaces";
+        unitConfig.ConditionPathExists = "${stateDir}/%i/current/bin/macvtap-up";
         restartIfChanged = false;
         serviceConfig = {
           Type = "oneshot";
           RemainAfterExit = true;
-          ExecStop =
-            let
-              stopScript = pkgs.writeScript "stop-microvm-tap-interfaces" ''
-                #! ${pkgs.runtimeShell} -e
-                cd ${stateDir}/$1
-                cat current/share/microvm/macvtap-interfaces | while read -r line;do
-                  opts=( $line )
-                  id="''${opts[0]}"
-                  ${pkgs.iproute2}/bin/ip link del name $id
-                done
-              '';
-            in "${stopScript} %i";
           SyslogIdentifier = "microvm-macvtap-interfaces@%i";
+          ExecStart = "${stateDir}/%i/current/bin/macvtap-up";
+          ExecStop = "${stateDir}/%i/booted/bin/macvtap-down";
         };
-        # `ExecStart`
-        scriptArgs = "%i";
-        script = ''
-          cd ${stateDir}/$1
-          i=0
-          cat current/share/microvm/macvtap-interfaces | while read -r line;do
-            opts=( $line )
-            id="''${opts[0]}"
-            mac="''${opts[1]}"
-            link="''${opts[2]}"
-            mode="''${opts[3]:+" mode ''${opts[3]}"}"
-            if [ -e /sys/class/net/$id ]; then
-              ${pkgs.iproute2}/bin/ip link del name $id
-            fi
-            ${pkgs.iproute2}/bin/ip link add link $link name $id address $mac type macvtap ''${mode[@]}
-            ${pkgs.iproute2}/bin/ip link set $id allmulticast on
-            echo 1 > /proc/sys/net/ipv6/conf/$id/disable_ipv6
-            ${pkgs.iproute2}/bin/ip link set $id up
-            ${pkgs.coreutils-full}/bin/chown ${user}:${group} /dev/tap$(< /sys/class/net/$id/ifindex)
-          done
-        '';
       };
 
 
@@ -216,83 +161,51 @@ in
         description = "Setup MicroVM '%i' devices for passthrough";
         before = [ "microvm@%i.service" ];
         partOf = [ "microvm@%i.service" ];
-        unitConfig.ConditionPathExists = "${stateDir}/%i/current/share/microvm/pci-devices";
+        unitConfig.ConditionPathExists = "${stateDir}/%i/current/bin/pci-setup";
         restartIfChanged = false;
         serviceConfig = {
           Type = "oneshot";
           RemainAfterExit = true;
           SyslogIdentifier = "microvm-pci-devices@%i";
+          ExecStart = "${stateDir}/%i/current/bin/pci-setup";
         };
-        # `ExecStart`
-        scriptArgs = "%i";
-        script = ''
-          cd ${stateDir}/$1
+      };
 
-          ${pkgs.kmod}/bin/modprobe vfio-pci
+      "microvm-virtiofsd@" =
+        let
+          runFromBootedOrCurrent = pkgs.writeShellScript "microvm-runFromBootedOrCurrent" ''
+            NAME="$1"
+            VM="$2"
+            cd "${stateDir}/$VM"
 
-          for path in $(cat current/share/microvm/pci-devices); do
-            pushd /sys/bus/pci/devices/$path
-            if [ -e driver ]; then
-              echo $path > driver/unbind
+            if [ -e booted ]; then
+              exec booted/bin/$NAME
+            else
+              exec current/bin/$NAME
             fi
-            echo vfio-pci > driver_override
-            echo $path > /sys/bus/pci/drivers_probe
+          '';
 
-            # In order to access the vfio dev the permissions must be set
-            # for the user/group running the VMM later.
-            #
-            # Insprired by https://www.kernel.org/doc/html/next/driver-api/vfio.html#vfio-usage-example
-            #
-            # assert we could get the IOMMU group number (=: name of VFIO dev)
-            [[ -e iommu_group ]] || exit 1
-            VFIO_DEV=$(basename $(readlink iommu_group))
-            echo "Making VFIO device $VFIO_DEV accessible for user"
-            chown ${user}:${group} /dev/vfio/$VFIO_DEV
-            popd
-          done
-        '';
-      };
-
-      "microvm-virtiofsd@" = rec {
-        description = "VirtioFS daemons for MicroVM '%i'";
-        before = [ "microvm@%i.service" ];
-        after = [ "local-fs.target" ];
-        partOf = [ "microvm@%i.service" ];
-        unitConfig.ConditionPathExists = "${stateDir}/%i/current/share/microvm/virtiofs";
-        restartIfChanged = false;
-        serviceConfig = {
-          Type = "forking";
-          GuessMainPID = "no";
-          WorkingDirectory = "${stateDir}/%i";
-          Restart = "always";
-          RestartSec = "5s";
-          SyslogIdentifier = "microvm-virtiofsd@%i";
-          LimitNOFILE = 1048576;
+        in {
+          description = "VirtioFS daemons for MicroVM '%i'";
+          before = [ "microvm@%i.service" ];
+          after = [ "local-fs.target" ];
+          partOf = [ "microvm@%i.service" ];
+          unitConfig.ConditionPathExists = "${stateDir}/%i/current/bin/virtiofsd-run";
+          restartIfChanged = false;
+          serviceConfig = {
+            WorkingDirectory = "${stateDir}/%i";
+            ExecStart = "${stateDir}/%i/current/bin/virtiofsd-run";
+            ExecReload = "${runFromBootedOrCurrent} virtiofsd-reload %i";
+            ExecStop = "${runFromBootedOrCurrent} virtiofsd-shutdown %i";
+            LimitNOFILE = 1048576;
+            NotifyAccess = "all";
+            PrivateTmp = "yes";
+            Restart = "always";
+            RestartSec = "5s";
+            SyslogIdentifier = "microvm-virtiofsd@%i";
+            Type = "notify";
+          };
         };
-        path = with pkgs; [ coreutils virtiofsd ];
-        script = ''
-          for d in current/share/microvm/virtiofs/*; do
-            SOCKET=$(cat $d/socket)
-            SOURCE="$(cat $d/source)"
-            mkdir -p "$SOURCE"
-
-            virtiofsd \
-              --socket-path=$SOCKET \
-              --socket-group=${config.users.users.microvm.group} \
-              --shared-dir "$SOURCE" \
-              --rlimit-nofile ${toString serviceConfig.LimitNOFILE} \
-              --thread-pool-size `nproc` \
-              --posix-acl --xattr \
-              ${lib.optionalString (config.microvm.virtiofsd.inodeFileHandles != null)
-                "--inode-file-handles=${config.microvm.virtiofsd.inodeFileHandles}"
-              } \
-              ${lib.concatStringsSep " " config.microvm.virtiofsd.extraArgs} \
-              &
-            # detach from shell, but remain in systemd cgroup
-            disown
-          done
-        '';
-      };
 
       "microvm@" = {
         description = "MicroVM '%i'";
@@ -302,7 +215,13 @@ in
           "microvm-pci-devices@%i.service"
           "microvm-virtiofsd@%i.service"
         ];
-        after = [ "network.target" ];
+        after = [
+          "network.target"
+          "microvm-tap-interfaces@%i.service"
+          "microvm-macvtap-interfaces@%i.service"
+          "microvm-pci-devices@%i.service"
+          "microvm-virtiofsd@%i.service"
+        ];
         unitConfig.ConditionPathExists = "${stateDir}/%i/current/bin/microvm-run";
         restartIfChanged = false;
         preStart = ''
@@ -345,7 +264,7 @@ in
     # This helper creates tap interfaces and attaches them to a bridge
     # for qemu regardless if it is run as root or not.
     security.wrappers.qemu-bridge-helper = lib.mkIf (!config.virtualisation.libvirtd.enable) {
-      source = "${pkgs.qemu}/libexec/qemu-bridge-helper";
+      source = "${pkgs.qemu-utils}/libexec/qemu-bridge-helper";
       owner = "root";
       group = "root";
       capabilities = "cap_net_admin+ep";
@@ -360,5 +279,32 @@ in
 
     # Enable Kernel Same-Page Merging
     hardware.ksm.enable = lib.mkDefault true;
+
+    # TODO: remove in 2026
+    system.activationScripts.microvm-update-check = ''
+      if [ -d ${stateDir} ]; then
+        _outdated_microvms=""
+
+        for dir in ${stateDir}/*; do
+          if [ -e $dir/current/share/microvm/virtiofs ] &&
+             [ ! -e $dir/current/bin/virtiofsd-run ]; then
+            _outdated_microvms="$_outdated_microvms $(basename $dir)"
+          elif [ -e $dir/current/share/microvm/tap-interfaces ] &&
+             [ ! -e $dir/current/bin/tap-up ]; then
+            _outdated_microvms="$_outdated_microvms $(basename $dir)"
+          elif [ -e $dir/current/share/microvm/macvtap-interfaces ] &&
+             [ ! -e $dir/current/bin/macvtap-up ]; then
+            _outdated_microvms="$_outdated_microvms $(basename $dir)"
+          elif [ -e $dir/current/share/microvm/pci-devices ] &&
+             [ ! -e $dir/current/bin/pci-setup ]; then
+            _outdated_microvms="$_outdated_microvms $(basename $dir)"
+          fi
+        done
+
+        if [ "$_outdated_microvms" != "" ]; then
+          echo "The following MicroVMs must be updated to follow the new virtiofsd/tap/macvtap/pci setup scheme: $_outdated_microvms"
+        fi
+      fi
+    '';
   };
 }
