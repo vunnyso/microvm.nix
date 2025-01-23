@@ -290,9 +290,12 @@ lib.warnIf (mem == 2048) ''
       "-device" "qemu-xhci"
     ]
     ++
-    builtins.concatMap ({ bus, path, ... }: {
+    builtins.concatMap ({ bus, path, deviceExtraArgs,... }: {
       pci = [
-        "-device" "vfio-pci,host=${path},multifunction=on"
+        "-device" "vfio-pci,host=${path},multifunction=on${
+          # Allow to pass additional arguments to pci device
+          lib.optionalString (deviceExtraArgs != null) ",${deviceExtraArgs}"
+        }"
       ];
       usb = [
         "-device" "usb-host,${path}"
