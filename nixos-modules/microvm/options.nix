@@ -373,7 +373,7 @@ in
               Identification of the device on its bus
             '';
           };
-          deviceExtraArgs = mkOption {
+          qemu.deviceExtraArgs = mkOption {
             type =  with types; nullOr str;
             default = null;
             description = ''
