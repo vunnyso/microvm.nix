@@ -63,6 +63,12 @@ in
       type = types.lines;
     };
 
+    postStop = mkOption {
+      description = "Commands to run after stopping the hypervisor";
+      default = "";
+      type = types.lines;
+    };
+
     socket = mkOption {
       description = "Hypervisor control socket path";
       default = "${hostName}.sock";

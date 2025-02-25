@@ -20,6 +20,7 @@ let
   inherit (hypervisorConfig) command canShutdown shutdownCommand;
   supportsNotifySocket = hypervisorConfig.supportsNotifySocket or false;
   preStart = hypervisorConfig.preStart or microvmConfig.preStart;
+  postStop = hypervisorConfig.postStop or microvmConfig.postStop;
   tapMultiQueue = hypervisorConfig.tapMultiQueue or false;
   setBalloonScript = hypervisorConfig.setBalloonScript or null;
 
@@ -36,7 +37,10 @@ let
       exec ${execArg} ${command}
     '';
   } // lib.optionalAttrs canShutdown {
-    microvm-shutdown = shutdownCommand;
+    microvm-shutdown = ''
+    ${postStop}
+    ${shutdownCommand}
+    '';
   } // lib.optionalAttrs (setBalloonScript != null) {
     microvm-balloon = ''
       set -e
