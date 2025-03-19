@@ -15,12 +15,15 @@ in
     set -eou pipefail
     ${pkgs.kmod}/bin/modprobe vfio-pci
   '' + lib.concatMapStrings ({ path, ... }: ''
-    cd /sys/bus/pci/devices/${path}
-    if [ -e driver ]; then
-      echo ${path} > driver/unbind
-    fi
-    echo vfio-pci > driver_override
-    echo ${path} > /sys/bus/pci/drivers_probe
+    SYS_PATH=/sys/bus/pci/devices/${path}
+    # Check if PCI device path exists
+    if [ -e $SYS_PATH ]; then
+      cd $SYS_PATH
+      if [ -e driver ]; then
+        echo ${path} > driver/unbind
+      fi
+      echo vfio-pci > driver_override
+      echo ${path} > /sys/bus/pci/drivers_probe
   '' +
   # In order to access the vfio dev the permissions must be set
   # for the user/group running the VMM later.
@@ -29,9 +32,10 @@ in
   #
   # assert we could get the IOMMU group number (=: name of VFIO dev)
   ''
-    [[ -e iommu_group ]] || exit 1
-    VFIO_DEV=$(basename $(readlink iommu_group))
-    echo "Making VFIO device $VFIO_DEV accessible for user"
-    chown ${user}:${group} /dev/vfio/$VFIO_DEV
+      [[ -e iommu_group ]] || exit 1
+      VFIO_DEV=$(basename $(readlink iommu_group))
+      echo "Making VFIO device $VFIO_DEV accessible for user"
+      chown ${user}:${group} /dev/vfio/$VFIO_DEV
+    fi
   '') pciDevices);
 }
