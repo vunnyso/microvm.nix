@@ -1,6 +1,7 @@
 { pkgs
 , microvmConfig
 , macvtapFds
+, withDriveLetters
 }:
 
 let
@@ -41,7 +42,6 @@ let
   inherit (microvmConfig) hostName vcpu mem balloon initialBalloonMem deflateOnOOM hotplugMem hotpluggedMem user interfaces shares socket forwardPorts devices vsock graphics storeOnDisk kernel initrdPath storeDisk;
   inherit (microvmConfig.qemu) machine extraArgs serialConsole;
 
-  inherit (import ../. { inherit (pkgs) lib; }) withDriveLetters;
 
   volumes = withDriveLetters microvmConfig;
 
