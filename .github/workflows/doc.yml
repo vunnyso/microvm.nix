@@ -1,9 +1,6 @@
-name: doc
+name: Documentation
 
-on:
-  push:
-    branches:
-      - main
+on: [merge_group, push, pull_request]
 
 jobs:
   deploy:
@@ -22,6 +19,7 @@ jobs:
       - name: Build
         run: nix build .#doc
       - name: Deploy
+        if: github.ref == 'refs/heads/main'
         uses: peaceiris/actions-gh-pages@v4
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
