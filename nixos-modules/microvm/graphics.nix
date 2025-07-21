@@ -2,9 +2,9 @@
 
 let
   # TODO: did not get sommelier to work
-  run-sommelier = with pkgs; writeShellScriptBin "run-sommelier" ''
-    exec ${lib.getExe sommelier} --virtgpu-channel -- $@
-  '';
+  # run-sommelier = with pkgs; writeShellScriptBin "run-sommelier" ''
+  #   exec ${lib.getExe sommelier} --virtgpu-channel -- $@
+  # '';
   # Working: run Wayland applications prefixed with `run-wayland-proxy`
   run-wayland-proxy = with pkgs; writeShellScriptBin "run-wayland-proxy" ''
     exec ${lib.getExe wayland-proxy-virtwl} --virtio-gpu -- $@
@@ -17,7 +17,7 @@ in
 lib.mkIf config.microvm.graphics.enable {
   boot.kernelModules = [ "drm" "virtio_gpu" ];
 
-  environment.systemPackages = with pkgs; [
+  environment.systemPackages = [
     #run-sommelier
     run-wayland-proxy
     run-waypipe

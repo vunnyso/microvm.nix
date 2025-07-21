@@ -130,7 +130,7 @@
         lib = import ./lib { inherit (nixpkgs) lib; };
 
         overlay = final: super: {
-          cloud-hypervisor-graphics = import "${spectrum}/pkgs/cloud-hypervisor" { inherit final super; }; 
+          cloud-hypervisor-graphics = import "${spectrum}/pkgs/cloud-hypervisor" { inherit final super; };
         };
         overlays.default = self.overlay;
 
@@ -160,7 +160,7 @@
                 inherit system;
                 modules = [
                   self.nixosModules.microvm
-                  ({ config, lib, ... }: {
+                  ({ lib, ... }: {
                     system.stateVersion = lib.trivial.release;
 
                     networking.hostName = "${hypervisor}-microvm";
@@ -209,7 +209,7 @@
                 nixpkgs.lib.optionalAttrs (builtins.elem hypervisor self.lib.hypervisorsWithNetwork) {
                   "${system}-${hypervisor}-example-with-tap" = makeExample {
                     inherit system hypervisor;
-                    config = { lib, ...}: {
+                    config = _: {
                       microvm.interfaces = [ {
                         type = "tap";
                         id = "vm-${builtins.substring 0 4 hypervisor}";

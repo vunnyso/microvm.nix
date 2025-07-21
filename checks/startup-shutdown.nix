@@ -1,4 +1,4 @@
-{ self, nixpkgs, system, makeTestConfigs }:
+{ nixpkgs, system, makeTestConfigs, ... }:
 
 let
   pkgs = nixpkgs.legacyPackages.${system};

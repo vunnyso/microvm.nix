@@ -16,7 +16,7 @@ nixpkgs.lib.nixosSystem {
     # this runs as a MicroVM
     self.nixosModules.microvm
 
-    ({ config, lib, pkgs, ... }: {
+    ({ lib, pkgs, ... }: {
       microvm = {
         hypervisor = "qemu";
         graphics.enable = true;

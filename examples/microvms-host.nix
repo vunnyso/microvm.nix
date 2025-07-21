@@ -10,7 +10,7 @@ nixpkgs.lib.nixosSystem {
     # this runs as a MicroVM that nests MicroVMs
     self.nixosModules.microvm
 
-    ({ config, lib, pkgs, ... }:
+    ({ config, lib, ... }:
       let
         inherit (self.lib) hypervisors;
 
