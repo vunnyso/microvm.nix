@@ -167,27 +167,29 @@
                     services.getty.autologinUser = "root";
 
                     nixpkgs.overlays = [ self.overlay ];
-                    microvm.hypervisor = hypervisor;
-                    # share the host's /nix/store if the hypervisor can do 9p
-                    microvm.shares = lib.optional (builtins.elem hypervisor hypervisorsWith9p) {
-                      tag = "ro-store";
-                      source = "/nix/store";
-                      mountPoint = "/nix/.ro-store";
-                    };
-                    # microvm.writableStoreOverlay = "/nix/.rw-store";
-                    # microvm.volumes = [ {
-                    #   image = "nix-store-overlay.img";
-                    #   mountPoint = config.microvm.writableStoreOverlay;
-                    #   size = 2048;
-                    # } ];
-                    microvm.interfaces = lib.optional (builtins.elem hypervisor hypervisorsWithUserNet) {
-                      type = "user";
-                      id = "qemu";
-                      mac = "02:00:00:01:01:01";
-                    };
-                    microvm.forwardPorts = lib.optional (hypervisor == "qemu") {
-                      host.port = 2222;
-                      guest.port = 22;
+                    microvm = {
+                      inherit hypervisor;
+                      # share the host's /nix/store if the hypervisor can do 9p
+                      shares = lib.optional (builtins.elem hypervisor hypervisorsWith9p) {
+                        tag = "ro-store";
+                        source = "/nix/store";
+                        mountPoint = "/nix/.ro-store";
+                      };
+                      # writableStoreOverlay = "/nix/.rw-store";
+                      # volumes = [ {
+                      #   image = "nix-store-overlay.img";
+                      #   mountPoint = config.microvm.writableStoreOverlay;
+                      #   size = 2048;
+                      # } ];
+                      interfaces = lib.optional (builtins.elem hypervisor hypervisorsWithUserNet) {
+                        type = "user";
+                        id = "qemu";
+                        mac = "02:00:00:01:01:01";
+                      };
+                      forwardPorts = lib.optional (hypervisor == "qemu") {
+                        host.port = 2222;
+                        guest.port = 22;
+                      };
                     };
                     networking.firewall.allowedTCPPorts = lib.optional (hypervisor == "qemu") 22;
                     services.openssh = lib.optionalAttrs (hypervisor == "qemu") {
@@ -215,8 +217,10 @@
                         id = "vm-${builtins.substring 0 4 hypervisor}";
                         mac = "02:00:00:01:01:0${toString n}";
                       } ];
-                      networking.interfaces.eth0.useDHCP = true;
-                      networking.firewall.allowedTCPPorts = [ 22 ];
+                      networking = {
+                        interfaces.eth0.useDHCP = true;
+                        firewall.allowedTCPPorts = [ 22 ];
+                      };
                       services.openssh = {
                         enable = true;
                         settings.PermitRootLogin = "yes";
