@@ -27,7 +27,7 @@ in
             events = "PROCESS_STATE";
           };
         } // builtins.listToAttrs (
-          map ({ proto, tag, socket, source, ... }: {
+          map ({ tag, socket, source, ... }: {
             name = "program:virtiofsd-${tag}";
             value = {
               stderr_syslog = true;

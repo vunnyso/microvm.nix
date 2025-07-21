@@ -10,7 +10,7 @@ nixpkgs.lib.nixosSystem {
     # this runs as a MicroVM
     self.nixosModules.microvm
 
-    ({ config, lib, pkgs, ... }: {
+    ({ lib, pkgs, ... }: {
       microvm = {
         hypervisor = "cloud-hypervisor";
         graphics.enable = true;

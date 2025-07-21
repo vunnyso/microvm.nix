@@ -124,7 +124,7 @@ in {
       }"
     ]) (enumerate 0 volumes) ++
     lib.optionals (shares != []) (
-      builtins.concatMap ({ proto, index, socket, source, tag, ... }: {
+      builtins.concatMap ({ proto, index, socket, tag, ... }: {
         "virtiofs" = [
           "-chardev"
           "socket,id=fs${toString index},path=${socket}"

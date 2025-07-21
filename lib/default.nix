@@ -14,7 +14,7 @@ rec {
 
   defaultFsType = "ext4";
 
-  withDriveLetters = { volumes, hypervisor, storeOnDisk, ... }:
+  withDriveLetters = { volumes, storeOnDisk, ... }:
     let
       offset =
         if storeOnDisk

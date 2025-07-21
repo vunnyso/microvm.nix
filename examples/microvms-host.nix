@@ -10,7 +10,7 @@ nixpkgs.lib.nixosSystem {
     # this runs as a MicroVM that nests MicroVMs
     self.nixosModules.microvm
 
-    ({ config, lib, pkgs, ... }:
+    ({ config, lib, ... }:
       let
         inherit (self.lib) hypervisors;
 
@@ -123,18 +123,19 @@ nixpkgs.lib.nixosSystem {
             networkConfig.Bridge = "virbr0";
           };
         };
-        # Allow DHCP server
-        networking.firewall.allowedUDPPorts = [ 67 ];
-        # Allow Internet access
-        networking.nat = {
-          enable = true;
-          enableIPv6 = true;
-          internalInterfaces = [ "virbr0" ];
+        networking = {
+          extraHosts = lib.concatMapStrings (hypervisor: ''
+            ${hypervisorIPv4Addrs.${hypervisor}} ${hypervisor}
+          '') hypervisors;
+          # Allow DHCP server
+          firewall.allowedUDPPorts = [ 67 ];
+          # Allow Internet access
+          nat = {
+            enable = true;
+            enableIPv6 = true;
+            internalInterfaces = [ "virbr0" ];
+          };
         };
-
-        networking.extraHosts = lib.concatMapStrings (hypervisor: ''
-          ${hypervisorIPv4Addrs.${hypervisor}} ${hypervisor}
-        '') hypervisors;
       })
   ];
 }
