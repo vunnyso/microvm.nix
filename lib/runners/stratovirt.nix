@@ -11,7 +11,7 @@ let
   inherit (microvmConfig)
     hostName
     vcpu mem balloon initialBalloonMem hotplugMem hotpluggedMem interfaces shares socket forwardPorts devices
-    kernel initrdPath
+    kernel initrdPath credentialFiles
     storeOnDisk storeDisk;
 
   tapMultiQueue = vcpu > 1;
@@ -79,6 +79,8 @@ in {
     then throw "stratovirt does not support hotplugMem"
     else if hotpluggedMem != 0
     then throw "stratovirt does not support hotpluggedMem"
+    else if credentialFiles != {}
+    then throw "stratovirt does not support credentialFiles"
     else lib.escapeShellArgs (
     [
       "${pkgs.expect}/bin/unbuffer"

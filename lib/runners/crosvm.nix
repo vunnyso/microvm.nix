@@ -9,7 +9,7 @@ let
   inherit (pkgs.stdenv) system;
   inherit (microvmConfig)
     vcpu mem balloon initialBalloonMem hotplugMem hotpluggedMem user volumes shares
-    socket devices vsock graphics
+    socket devices vsock graphics credentialFiles
     kernel initrdPath storeDisk storeOnDisk;
   inherit (microvmConfig.crosvm) pivotRoot extraArgs;
 
@@ -53,6 +53,8 @@ in {
     then throw "crosvm does not support hotplugMem"
     else if hotpluggedMem != 0
     then throw "crosvm does not support hotpluggedMem"
+    else if credentialFiles != {}
+    then throw "crosvm does not support credentialFiles"
     else lib.escapeShellArgs (
       [
         "${pkgs.crosvm}/bin/crosvm" "run"
