@@ -12,7 +12,7 @@ let
 
   hasUserConsole = (extractOptValues "--console" extraArgs).values != [];
   hasUserSerial = (extractOptValues "--serial" extraArgs).values != [];
-  userSerial = if hasUserSerial then (extractOptValues "--serial" extraArgs).values else "";
+  userSerial = lib.optionalString hasUserSerial (extractOptValues "--serial" extraArgs).values;
 
   kernelPath = {
     x86_64-linux = "${kernel.dev}/vmlinux";
@@ -26,7 +26,7 @@ let
     then "console=ttyAMA0"
     else "";
 
-  kernelConsole = if (!hasUserSerial || userSerial == "tty") then kernelConsoleDefault else "";
+  kernelConsole = lib.optionalString (!hasUserSerial || userSerial == "tty") kernelConsoleDefault;
 
   kernelCmdLine = "${kernelConsole} reboot=t panic=-1 ${builtins.unsafeDiscardStringContext (toString microvmConfig.kernelParams)}";
 
