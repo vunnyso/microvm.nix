@@ -21,7 +21,8 @@ in
           "eventlistener:notify" = {
             command = pkgs.writers.writePython3 "supervisord-event-handler" { } (
               pkgs.replaceVars  ./supervisord-event-handler.py {
-                virtiofsdCount = builtins.length virtiofsShares;
+                # 1 for the event handler process
+                virtiofsdCount = 1 + builtins.length virtiofsShares;
               }
             );
             events = "PROCESS_STATE";
