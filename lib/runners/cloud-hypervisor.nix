@@ -43,7 +43,7 @@ let
   userVSockPath = extractParamValue "socket" userVSockStr;
   userVSockCID = extractParamValue "cid" userVSockStr;
   vsockCID = if vsock.cid != null && userVSockCID != null
-             then throw "Cannot set `microvm.vsock.cid` and --vsock 'cid=${userVSockCID}...' from `microvm.cloud-hypervisor.extraArgs` at the same time"
+             then throw "Cannot set `microvm.vsock.cid` and --vsock 'cid=${userVSockCID}...' via `microvm.cloud-hypervisor.extraArgs` at the same time"
              else if vsock.cid != null
                   then vsock.cid
                   else userVSockCID;
@@ -131,7 +131,7 @@ let
   platformExtracted = extractOptValues "--platform" extraArgs;
   extraArgsWithoutPlatform = platformExtracted.args;
   userPlatformOpts = platformExtracted.values;
-  userPlatformStr = if userPlatformOpts == [] then "" else builtins.head userPlatformOpts;
+  userPlatformStr = lib.optionalString (userPlatformOpts != []) (builtins.head userPlatformOpts);
   userHasOemStrings = (extractParamValue "oem_strings" userPlatformStr) != null;
   platformOps =
     if userHasOemStrings then
