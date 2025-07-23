@@ -8,7 +8,7 @@ let
   inherit (microvmConfig)
     hostName preStart user
     vcpu mem balloon initialBalloonMem hotplugMem hotpluggedMem interfaces volumes shares devices vsock
-    kernel initrdPath
+    kernel initrdPath credentialFiles
     storeDisk storeOnDisk;
 in {
   preStart = ''
@@ -25,6 +25,8 @@ in {
     then throw "kvmtool does not support hotplugMem"
     else if hotpluggedMem != 0
     then throw "kvmtool does not support hotpluggedMem"
+    else if credentialFiles != {}
+    then throw "kvmtool does not support credentialFiles"
     else builtins.concatStringsSep " " (
       [
         "${pkgs.kvmtool}/bin/lkvm" "run"

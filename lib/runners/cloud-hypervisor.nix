@@ -7,7 +7,7 @@
 
 let
   inherit (pkgs) lib;
-  inherit (microvmConfig) vcpu mem balloon initialBalloonMem deflateOnOOM hotplugMem hotpluggedMem user interfaces volumes shares socket devices hugepageMem graphics storeDisk storeOnDisk kernel initrdPath;
+  inherit (microvmConfig) vcpu mem balloon initialBalloonMem deflateOnOOM hotplugMem hotpluggedMem user interfaces volumes shares socket devices hugepageMem graphics storeDisk storeOnDisk kernel initrdPath credentialFiles;
   inherit (microvmConfig.cloud-hypervisor) platformOEMStrings extraArgs;
 
   hasUserConsole = (extractOptValues "--console" extraArgs).values != [];
@@ -147,6 +147,8 @@ in {
   command =
     if user != null
     then throw "cloud-hypervisor will not change user"
+    else if credentialFiles != {}
+    then throw "cloud-hypervisor does not support credentialFiles"
     else lib.escapeShellArgs (
       [
         (if graphics.enable

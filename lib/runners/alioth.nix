@@ -9,7 +9,7 @@ let
     user
     vcpu mem balloon initialBalloonMem hotplugMem hotpluggedMem interfaces volumes shares devices vsock
     kernel initrdPath
-    storeDisk storeOnDisk;
+    storeDisk storeOnDisk credentialFiles;
 in {
   command =
     if user != null
@@ -22,6 +22,8 @@ in {
     then throw "alioth does not support hotplugMem"
     else if hotpluggedMem != 0
     then throw "alioth does not support hotpluggedMem"
+    else if credentialFiles != {}
+    then throw "alioth does not support credentialFiles"
     else builtins.concatStringsSep " " (
       [
         "${pkgs.alioth}/bin/alioth" "run"
