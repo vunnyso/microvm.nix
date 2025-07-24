@@ -37,9 +37,6 @@ def main():
         if count >= expected_count:
             subprocess.run(["systemd-notify", "--ready"])
 
-        if count <= 0:
-            subprocess.run(["systemd-notify", "--stopping"])
-
         write_stdout('RESULT 2\nOK')
 
 
