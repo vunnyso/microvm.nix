@@ -190,9 +190,7 @@ lib.warnIf (mem == 2048) ''
       "-chardev" "stdio,id=stdio,signal=off"
       "-device" "virtio-rng-${devType}"
     ] ++
-    lib.optionals (fwCfgOptions != [])  [
-      "-fw_cfg" (lib.concatStringsSep "," fwCfgOptions)
-    ] ++
+    builtins.concatMap (fwCfgOption: ["-fw_cfg" fwCfgOption]) fwCfgOptions ++
     lib.optionals serialConsole [
       "-serial" "chardev:stdio"
     ] ++
