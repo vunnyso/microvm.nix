@@ -1,11 +1,12 @@
-{ lib, microvmConfig }:
+{ pkgs }:
 let
-  inherit (microvmConfig) vmHostPackages;
+  inherit (pkgs) lib;
+
   inherit (import ../../lib {
     inherit lib;
   }) defaultFsType;
 
-  fsTypeToUtil = fs: with vmHostPackages; {
+  fsTypeToUtil = fs: with pkgs; {
       "ext2" = e2fsprogs;
       "ext3" = e2fsprogs;
       "ext4" = e2fsprogs;
@@ -18,11 +19,10 @@ let
 
 in
 {
-  createVolumesScript =
-    volumes:
+  createVolumesScript = volumes:
     lib.optionalString (volumes != [ ]) (
       lib.optionalString (lib.any (v: v.autoCreate) volumes) ''
-        PATH=$PATH:${lib.makeBinPath ([ vmHostPackages.coreutils ] ++ (collectFsUtils volumes))}
+        PATH=$PATH:${lib.makeBinPath ([ pkgs.coreutils ] ++ (collectFsUtils volumes))}
       ''
       + lib.concatMapStringsSep "\n" (
         { image

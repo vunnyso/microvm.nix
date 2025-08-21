@@ -9,7 +9,7 @@ let
   inherit (microvmConfig) hostName vmHostPackages;
 
   inherit (import ./. { inherit lib; }) makeMacvtap withDriveLetters extractOptValues extractParamValue;
-  inherit (import ./volumes.nix { inherit lib microvmConfig; }) createVolumesScript;
+  inherit (import ./volumes.nix { pkgs = microvmConfig.vmHostPackages; }) createVolumesScript;
   inherit (makeMacvtap {
     inherit microvmConfig hypervisorConfig;
   }) openMacvtapFds macvtapFds;
