@@ -20,6 +20,8 @@
       systems = [
         "x86_64-linux"
         "aarch64-linux"
+        "x86_64-darwin"
+        "aarch64-darwin"
       ];
     in
       flake-utils.lib.eachSystem systems (system: {
@@ -110,7 +112,7 @@
               name = builtins.replaceStrings [ "${system}-" ] [ "" ] systemName;
               inherit (nixos.config.microvm) hypervisor;
             in
-              if nixos.pkgs.system == system
+              if nixos.pkgs.system == nixpkgs.lib.replaceString "-darwin" "-linux" system
               then result // {
                 "${name}" = nixos.config.microvm.runner.${hypervisor};
               }
@@ -157,7 +159,8 @@
             hypervisorsWithUserNet = [ "qemu" "kvmtool" ];
             makeExample = { system, hypervisor, config ? {} }:
               nixpkgs.lib.nixosSystem {
-                inherit system;
+                system = nixpkgs.lib.replaceString "-darwin" "-linux" system;
+
                 modules = [
                   self.nixosModules.microvm
                   ({ lib, ... }: {
@@ -190,6 +193,9 @@
                         host.port = 2222;
                         guest.port = 22;
                       };
+                      # Allow build on Darwin
+                      vmHostPackages = lib.mkIf (lib.hasSuffix "-darwin" system)
+                        nixpkgs.legacyPackages.${system};
                     };
                     networking.firewall.allowedTCPPorts = lib.optional (hypervisor == "qemu") 22;
                     services.openssh = lib.optionalAttrs (hypervisor == "qemu") {
