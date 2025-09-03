@@ -269,7 +269,7 @@ in
           };
           size = mkOption {
             type = int;
-            description = "Volume size if created automatically";
+            description = "Volume size (in MiB) if created automatically";
           };
           autoCreate = mkOption {
             type = bool;
