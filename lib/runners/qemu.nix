@@ -41,12 +41,10 @@ let
   qemuPkg =
     if microvmConfig.cpu == null && vmHostPackages.stdenv.hostPlatform.isLinux
     then
-      # If no CPU is requested and the host is Linux,
-      # use qemu with KVM support (hardware-accelerated)
+      # If no CPU is requested and the host is Linux, use qemu with KVM support (hardware-accelerated)
       vmHostPackages.qemu_kvm
     else
-      # Different CPU architectures like darwin or Non-Linux
-      # use the generic qemu package
+      # Different CPU architectures like darwin or Non-Linux use the generic qemu package
       vmHostPackages.qemu;
 
   qemu = overrideQemu qemuPkg;
